@@ -1,0 +1,19 @@
+# Local recovery copies and temporary UI verification output
+backups/
+*.tmp
+*.bak
+
+# Local plugin cache and scratch probes
+plugins-cache.json
+_t.js
+_t2.js
+
+# Visual Studio / MSBuild output if the project is opened in an IDE
+bin/
+obj/
+.vs/
+
+# User-specific settings and logs
+settings.txt
+*.log
+
