@@ -244,6 +244,8 @@ namespace DeepSeekHarness
         private bool suppressGptCompatibilityChange;
         private bool suppressReasoningControlChange;
         private bool dshSetupBusy;
+        private bool installPromptShown;
+        private bool installationFound;
 
         public DshManagerForm(bool launchMode)
         {
@@ -279,6 +281,7 @@ namespace DeepSeekHarness
             this.Shown += (s, e) =>
             {
                 if (launchMode) QuickLaunch();
+                if (!installationFound && !launchMode) PromptForInstallDirectory();
                 RefreshPluginsAsync(false);   // 后台预取插件列表（失败静默回退缓存）
                 RefreshBeautifyAsync(false);  // 后台预取美化插件（失败静默回退缓存）
             };
@@ -408,7 +411,7 @@ namespace DeepSeekHarness
             nudPort.ValueChanged += (s, e) => { dshPort = (int)nudPort.Value; currentUrl = "http://127.0.0.1:" + dshPort; if (lblUrl != null) lblUrl.Text = currentUrl; }; AddRow(port, nudPort); details.Controls.Add(port, 2, 0);
             AddRow(status, details); AddRow(manageLayout, Card(status));
 
-            btnInstall = ActionButton("安装 DeepSeek Harness", false, BtnInstall_Click);
+            btnInstall = ActionButton("下载并安装 DSH", false, BtnInstall_Click);
             btnStart = ActionButton("启动", true, BtnStart_Click);
             btnStop = ActionButton("停止", false, BtnStop_Click);
             btnAppWindow = ActionButton("应用窗口", false, (s, e) => OpenAppWindow());
@@ -422,11 +425,8 @@ namespace DeepSeekHarness
             var path = Grid(0, 100, 0);
             var pathLabel = BodyLabel("安装目录"); pathLabel.Margin = new Padding(0, 0, 12, 0); path.Controls.Add(pathLabel, 0, 0);
             txtInstallDir = new TextBox { Text = installDir, Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(0, 5, 12, 5) }; path.Controls.Add(txtInstallDir, 1, 0);
-            btnBrowse = ActionButton("浏览…", false, (s, e) => {
-                if (dshSetupBusy) return;
-                using (var dlg = new FolderBrowserDialog { SelectedPath = installDir })
-                    if (dlg.ShowDialog() == DialogResult.OK) { txtInstallDir.Text = installDir = dlg.SelectedPath; CheckInstallation(); SaveSettings(); ReconcileGptCompatibility(); ReconcileReasoningControl(); }
-            }); btnBrowse.Margin = new Padding(0, 0, 0, 6); path.Controls.Add(btnBrowse, 2, 0); AddRow(settings, path);
+            btnBrowse = ActionButton("选择已有安装", false, (s, e) => SelectInstallDirectory());
+            btnBrowse.Margin = new Padding(0, 0, 0, 6); path.Controls.Add(btnBrowse, 2, 0); AddRow(settings, path);
             chkAutoUpdate = NewCheckBox("启动时自动更新"); chkAutoOpen = NewCheckBox("启动后自动打开界面"); chkAppWindow = NewCheckBox("使用应用窗口");
             AddRow(settings, Flow(chkAutoUpdate, chkAutoOpen, chkAppWindow)); AddRow(manageLayout, Card(settings));
 
@@ -750,51 +750,16 @@ namespace DeepSeekHarness
 
         private void CheckInstallation()
         {
-            // 先检查当前设定的目录
-            string dshPath = Path.Combine(installDir, "node_modules", "@deepseek-ai", "dsh");
-            bool installed = Directory.Exists(dshPath);
-
-            // 如果没找到，搜索其他常见位置
-            if (!installed)
+            string discovered = FindDshInstallDirectory(installDir);
+            bool installed = !string.IsNullOrEmpty(discovered);
+            if (installed && !string.Equals(Path.GetFullPath(installDir ?? ""), Path.GetFullPath(discovered), StringComparison.OrdinalIgnoreCase))
             {
-                string[] commonDirs = new string[] {
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "DeepSeek-Harness"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "DeepSeek Harness"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dsh"),
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + "\\DeepSeek-Harness",
-                    Environment.CurrentDirectory
-                };
-                var checkedDirs = new HashSet<string>();
-                foreach (string dir in commonDirs)
-                {
-                    if (string.IsNullOrEmpty(dir) || checkedDirs.Contains(dir)) continue;
-                    checkedDirs.Add(dir);
-                    string testPath = Path.Combine(dir, "node_modules", "@deepseek-ai", "dsh");
-                    if (Directory.Exists(testPath))
-                    {
-                        installDir = dir;
-                        txtInstallDir.Text = dir;
-                        installed = true;
-                        break;
-                    }
-                }
+                installDir = discovered;
+                if (txtInstallDir != null) txtInstallDir.Text = discovered;
+                SaveSettings();
+                Log("[检测] 已找到 DeepSeek Harness: " + discovered);
             }
-
-            // 还检查 DSH_HOME 环境变量
-            if (!installed)
-            {
-                string dshHome = Environment.GetEnvironmentVariable("DSH_HOME");
-                if (!string.IsNullOrEmpty(dshHome))
-                {
-                    string testPath = Path.Combine(dshHome, "profiles", "web", "node_modules", "@deepseek-ai", "dsh");
-                    if (Directory.Exists(testPath))
-                    {
-                        installDir = dshHome;
-                        txtInstallDir.Text = dshHome;
-                        installed = true;
-                    }
-                }
-            }
+            installationFound = installed;
 
             // 检查端口是否已在运行（区分 DSH 服务与其他程序占用，避免误报/误杀）
             int port = nudPort != null ? (int)nudPort.Value : 3080;
@@ -872,11 +837,84 @@ namespace DeepSeekHarness
                 btnCopyUrl.Enabled = false;
                 lblStatus.Text = "状态: 未安装";
                 lblStatus.ForeColor = Color.Gray;
-                btnInstall.Text = "安装 DeepSeek Harness";
+                btnInstall.Text = "下载并安装 DSH";
                 btnInstall.Enabled = true;
                 SetStatusBar("未安装");
                 SetTokenBadge("🔒 待启动", Color.Gray);
             }
+        }
+
+        private static bool IsDshInstallDirectory(string dir)
+        {
+            if (string.IsNullOrWhiteSpace(dir)) return false;
+            try
+            {
+                string package = Path.Combine(dir, "node_modules", "@deepseek-ai", "dsh");
+                return Directory.Exists(package) && File.Exists(Path.Combine(package, "lib", "bin.js"));
+            }
+            catch { return false; }
+        }
+
+        private string FindDshInstallDirectory(string preferred)
+        {
+            var candidates = new List<string>();
+            Action<string> add = p => { if (!string.IsNullOrWhiteSpace(p)) candidates.Add(p); };
+            add(preferred);
+            string user = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            add(Path.Combine(user, "DeepSeek-Harness"));
+            add(Path.Combine(user, "DeepSeek Harness"));
+            add(Path.Combine(user, ".dsh"));
+            add(Path.Combine(local, "DeepSeek-Harness"));
+            add(Path.Combine(local, "Programs", "DeepSeek-Harness"));
+            add(Path.Combine(roaming, "DeepSeek-Harness"));
+            add(Environment.CurrentDirectory);
+            string dshHome = Environment.GetEnvironmentVariable("DSH_HOME");
+            add(dshHome);
+            if (!string.IsNullOrWhiteSpace(dshHome)) add(Path.Combine(dshHome, "profiles", "web"));
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string candidate in candidates)
+            {
+                try
+                {
+                    string full = Path.GetFullPath(candidate);
+                    if (seen.Add(full) && IsDshInstallDirectory(full)) return full;
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        private void SelectInstallDirectory()
+        {
+            if (dshSetupBusy) return;
+            using (var dlg = new FolderBrowserDialog { Description = "选择 DeepSeek Harness 的安装目录", SelectedPath = installDir ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ShowNewFolderButton = true })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                string selected = dlg.SelectedPath;
+                if (!IsDshInstallDirectory(selected))
+                {
+                    var result = MessageBox.Show(this, "该目录中没有检测到 DeepSeek Harness。是否仍将它设为下载和安装目录？", "确认安装目录", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                    if (result != DialogResult.Yes) return;
+                }
+                installDir = selected;
+                installationFound = IsDshInstallDirectory(selected);
+                if (txtInstallDir != null) txtInstallDir.Text = selected;
+                SaveSettings();
+                CheckInstallation();
+                ReconcileGptCompatibility();
+                ReconcileReasoningControl();
+            }
+        }
+
+        private void PromptForInstallDirectory()
+        {
+            if (installPromptShown || installationFound || IsDisposed) return;
+            installPromptShown = true;
+            Log("[检测] 未找到 DeepSeek Harness。请选择已有安装目录，或使用“下载并安装 DSH”。");
+            var result = MessageBox.Show(this, "没有自动找到 DeepSeek Harness。现在选择已有安装目录吗？\n\n也可以稍后点击“下载并安装 DSH”自动下载。", "未找到 DSH", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+            if (result == DialogResult.Yes) SelectInstallDirectory();
         }
 
         private void ChkGptCompatibility_CheckedChanged(object sender, EventArgs e)
@@ -1133,7 +1171,7 @@ namespace DeepSeekHarness
             if (dshSetupBusy) return;
             dshSetupBusy = true;
             btnInstall.Enabled = false;
-            btnInstall.Text = "正在安装...";
+            btnInstall.Text = "正在下载并安装...";
             progressBar.Visible = true;
             txtLog.Clear();
 
@@ -1196,7 +1234,7 @@ namespace DeepSeekHarness
                 File.WriteAllText(Path.Combine(installDir, "package.json"), pkg.Trim(), Encoding.ASCII);
                 Log("[OK] package.json 已创建。");
 
-                Log("[4/5] 运行 npm install（可能需要 2-5 分钟）...");
+                Log("[4/5] 正在从 npm 下载 DeepSeek Harness（可能需要 2-5 分钟）...");
                 int npmResult = RunNpmInstall(FindNode(), installDir);
                 if (npmResult != 0)
                 {
