@@ -1055,33 +1055,18 @@ public class DshManagerForm : Form
             string signature = GetCompatibilitySignature();
             if (compatibilitySignature == null)
             {
-                string initialRunningError;
-                if (isRunning || DshBlocksCompatibility(out initialRunningError)) return;
                 compatibilitySignature = signature;
-                compatibilityReconcileBusy = true;
-                try
-                {
-                    if (reasoningControlEnabled) RunGptCompatibility("reasoning-on");
-                    if (gptCompatFixEnabled) RunGptCompatibility("on");
-                    compatibilitySignature = GetCompatibilitySignature();
-                }
-                finally { compatibilityReconcileBusy = false; }
                 return;
             }
             if (signature == compatibilitySignature) return;
-            string runningError;
-            if (isRunning || DshBlocksCompatibility(out runningError))
-            {
-                return;
-            }
             compatibilitySignature = signature;
             compatibilityReconcileBusy = true;
             try
             {
-                if (reasoningControlEnabled) RunGptCompatibility("reasoning-on");
-                if (gptCompatFixEnabled) RunGptCompatibility("on");
+                if (reasoningControlEnabled) RunGptCompatibility("reasoning-on", true);
+                if (gptCompatFixEnabled) RunGptCompatibility("on", true);
                 compatibilitySignature = GetCompatibilitySignature();
-                Log("[兼容设置] 检测到模型配置变化，已自动刷新思考强度和工具调用兼容设置。");
+                Log("[兼容设置] 检测到模型配置变化，已自动刷新思考强度和工具调用设置。DSH 会自动热加载新配置。");
             }
             finally { compatibilityReconcileBusy = false; }
         }
@@ -1121,11 +1106,11 @@ public class DshManagerForm : Form
             return Path.Combine(GetGptCompatStateRoot(), "state.json");
         }
 
-        private bool RunGptCompatibility(string mode)
+        private bool RunGptCompatibility(string mode, bool allowRunning = false)
         {
             string featureLabel = mode.StartsWith("reasoning", StringComparison.OrdinalIgnoreCase) ? "思考强度" : "GPT 兼容";
             string runningError;
-            if (mode != "status" && DshBlocksCompatibility(out runningError))
+            if (mode != "status" && !allowRunning && DshBlocksCompatibility(out runningError))
             {
                 Log("[" + featureLabel + "] " + runningError);
                 return false;
