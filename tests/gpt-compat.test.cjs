@@ -63,7 +63,11 @@ async function main() {
   fs.appendFileSync(target, '\n# Later user changes\n');
   const later = fs.readFileSync(target);
   await run({ ...options, mode: 'off' });
-  assert.deepEqual(fs.readFileSync(target), original);
+  const restoredLater = yaml.load(fs.readFileSync(target, 'utf8'));
+  assert.equal(restoredLater['ui-theme'].preference, 'dark');
+  assert.equal(restoredLater['llm-pi-ai'].providers.gpt.compat.supportsStrictMode, undefined);
+  assert.equal(restoredLater['llm-pi-ai'].providers.gpt.compat.supportsMaxOutputTokens, false);
+  const laterBaseline = fs.readFileSync(target);
   const archived = fs.readdirSync(loc.dir).find(n => n.startsWith('settings.before-restore-'));
   assert.deepEqual(fs.readFileSync(path.join(loc.dir, archived)), later);
   await run({ ...options, mode: 'on' });
@@ -71,7 +75,7 @@ async function main() {
   const beforeFailure = fs.readFileSync(target);
   await assert.rejects(run({ ...options, mode: 'off' }), /备份缺失或校验失败/);
   assert.deepEqual(fs.readFileSync(target), beforeFailure);
-  fs.writeFileSync(loc.backup, original);
+  fs.writeFileSync(loc.backup, laterBaseline);
   await run({ ...options, mode: 'off' });
   fs.writeFileSync(target, 'llm-pi-ai: {providers: {}}');
   await assert.rejects(run({ ...options, mode: 'on' }), /未找到/);

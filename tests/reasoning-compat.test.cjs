@@ -37,6 +37,23 @@ async function main() {
   const loc = locations(target, stateRoot);
   assert.equal(fs.existsSync(loc.stateFile), false);
   assert.equal(fs.existsSync(loc.backup), false);
+
+  const target2 = path.join(root, 'settings-with-later-model.yaml');
+  const stateRoot2 = path.join(root, 'manager-with-later-model');
+  fs.writeFileSync(target2, original);
+  const options2 = { target: target2, stateRoot: stateRoot2, installDir };
+  await run({ ...options2, mode: 'reasoning-on' });
+  const later = yaml.load(fs.readFileSync(target2, 'utf8'));
+  later['llm-pi-ai'].providers.grok = { api: 'openai-responses', models: [{ id: 'grok-test' }] };
+  fs.writeFileSync(target2, yaml.dump(later, { noRefs: true, lineWidth: -1, sortKeys: false }));
+  await run({ ...options2, mode: 'reasoning-on' });
+  let laterSettings = yaml.load(fs.readFileSync(target2, 'utf8'));
+  assert.deepEqual(laterSettings['llm-pi-ai'].providers.grok.models[0].reasoningEfforts, { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' });
+  await run({ ...options2, mode: 'reasoning-off' });
+  await run({ ...options2, mode: 'off' });
+  laterSettings = yaml.load(fs.readFileSync(target2, 'utf8'));
+  assert.equal(laterSettings['llm-pi-ai'].providers.grok.models[0].reasoningEfforts, undefined);
+  assert.equal(laterSettings['llm-pi-ai'].providers.grok.models[0].id, 'grok-test');
   console.log('PASS: reasoning toggle, independent strict toggle, route filtering and exact restore.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
