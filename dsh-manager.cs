@@ -212,6 +212,9 @@ public class DshManagerForm : Form
         private Label lblPluginStatus;
         private ListView pluginList;
         private System.Windows.Forms.Timer pluginTimer;
+        private System.Windows.Forms.Timer compatibilityTimer;
+        private string compatibilitySignature;
+        private bool compatibilityReconcileBusy;
 
         // 美化页控件
         private ListView beautyList;
@@ -295,6 +298,8 @@ public class DshManagerForm : Form
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
+            if (pluginTimer != null) pluginTimer.Stop();
+            if (compatibilityTimer != null) compatibilityTimer.Stop();
             base.OnFormClosed(e);
             if (appIcon != null)
             {
@@ -461,6 +466,9 @@ public class DshManagerForm : Form
             ConfigurePluginListStyle(); ConfigureBeautyListStyle(); UpdateNavSelection(navButtons, 0);
             pluginTimer = new System.Windows.Forms.Timer { Interval = 30 * 60 * 1000 };
             pluginTimer.Tick += (s, e) => RefreshPluginsAsync(false); pluginTimer.Start();
+            compatibilityTimer = new System.Windows.Forms.Timer { Interval = 3000 };
+            compatibilityTimer.Tick += (s, e) => AutoReconcileCompatibility();
+            compatibilityTimer.Start();
             tabControl.SelectedIndexChanged += (s, e) => {
                 if (tabControl.SelectedIndex == 1 && !pluginLoading && pluginList.Items.Count == 0) RefreshPluginsAsync(false);
                 if (tabControl.SelectedIndex == 2 && !beautyLoading && beautifyData == null) RefreshBeautifyAsync(false);
@@ -1026,6 +1034,56 @@ public class DshManagerForm : Form
                 return;
             }
             RunGptCompatibility(reasoningControlEnabled ? "reasoning-on" : "reasoning-off");
+            compatibilitySignature = GetCompatibilitySignature();
+        }
+
+        private string GetCompatibilitySignature()
+        {
+            try
+            {
+                string target = GetDshSettingsYamlPath();
+                if (!File.Exists(target)) return "missing";
+                FileInfo info = new FileInfo(target);
+                return info.Length.ToString() + ":" + info.LastWriteTimeUtc.Ticks.ToString();
+            }
+            catch { return "error"; }
+        }
+
+        private void AutoReconcileCompatibility()
+        {
+            if (compatibilityReconcileBusy || dshSetupBusy || (!gptCompatFixEnabled && !reasoningControlEnabled)) return;
+            string signature = GetCompatibilitySignature();
+            if (compatibilitySignature == null)
+            {
+                string initialRunningError;
+                if (isRunning || DshBlocksCompatibility(out initialRunningError)) return;
+                compatibilitySignature = signature;
+                compatibilityReconcileBusy = true;
+                try
+                {
+                    if (reasoningControlEnabled) RunGptCompatibility("reasoning-on");
+                    if (gptCompatFixEnabled) RunGptCompatibility("on");
+                    compatibilitySignature = GetCompatibilitySignature();
+                }
+                finally { compatibilityReconcileBusy = false; }
+                return;
+            }
+            if (signature == compatibilitySignature) return;
+            string runningError;
+            if (isRunning || DshBlocksCompatibility(out runningError))
+            {
+                return;
+            }
+            compatibilitySignature = signature;
+            compatibilityReconcileBusy = true;
+            try
+            {
+                if (reasoningControlEnabled) RunGptCompatibility("reasoning-on");
+                if (gptCompatFixEnabled) RunGptCompatibility("on");
+                compatibilitySignature = GetCompatibilitySignature();
+                Log("[兼容设置] 检测到模型配置变化，已自动刷新思考强度和工具调用兼容设置。");
+            }
+            finally { compatibilityReconcileBusy = false; }
         }
 
         private bool EnsureReasoningControl()
