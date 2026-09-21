@@ -7,6 +7,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Text;
@@ -17,6 +18,10 @@ using System.Net.Sockets;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
+
+ [assembly: AssemblyVersion("1.0.0.0")]
+ [assembly: AssemblyFileVersion("1.0.0.0")]
+ [assembly: AssemblyInformationalVersion("1.0.0")]
 
 namespace DeepSeekHarness
 {
@@ -164,8 +169,9 @@ namespace DeepSeekHarness
         }
     }
 
-    public class DshManagerForm : Form
-    {
+public class DshManagerForm : Form
+{
+        private const string ManagerVersion = "1.0.0";
         // 品牌色（与 Web GUI --dsw-static-deepseek-500 一致）
         private static readonly Color BrandBlue = Color.FromArgb(65, 118, 230);
         private static readonly Color BrandBlueHover = Color.FromArgb(56, 108, 224);
@@ -252,7 +258,7 @@ namespace DeepSeekHarness
             SuspendLayout();
             AutoScaleDimensions = new SizeF(96F, 96F);
             AutoScaleMode = AutoScaleMode.Dpi;
-            this.Text = "DeepSeek Harness 管理器";
+            this.Text = "DeepSeek Harness 管理器 v" + ManagerVersion;
             this.Size = new Size(1140, 780);
             this.MinimumSize = new Size(980, 680);
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -571,7 +577,7 @@ namespace DeepSeekHarness
             var features = Stack();
             var first = Grid(50, 50); first.Controls.Add(CreateAboutFeature("运行管理", "安装、更新、启动、停止和访问 DSH 服务"), 0, 0); first.Controls.Add(CreateAboutFeature("扩展中心", "浏览、筛选和下载社区插件与美化主题"), 1, 0); AddRow(features, first);
             var second = Grid(50, 50); second.Controls.Add(CreateAboutFeature("本地配置", "管理目录、端口、启动方式和自动更新"), 0, 0); second.Controls.Add(CreateAboutFeature("GPT 兼容", "按需启用工具调用与思考强度配置"), 1, 0); AddRow(features, second); AddRow(content, Card(features));
-            var project = Stack(); AddRow(project, BodyLabel("DSH Manager · 基于 @deepseek-ai/dsh"));
+            var project = Stack(); AddRow(project, BodyLabel("DSH Manager v" + ManagerVersion + " · 基于 @deepseek-ai/dsh"));
             var ownLink = new LinkLabel { Text = "打开我的 DSH Manager 开源仓库 ↗", AutoSize = true, Dock = DockStyle.Top, LinkColor = BrandBlue, Margin = new Padding(0, 8, 0, 4) };
             ownLink.LinkClicked += (s, e) => { try { Process.Start("https://github.com/falsecsx/dsh-manager"); } catch { } };
             AddRow(project, ownLink);
