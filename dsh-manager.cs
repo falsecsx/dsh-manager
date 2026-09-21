@@ -713,6 +713,16 @@ public class DshManagerForm : Form
 
         private static Icon CreateAppIcon()
         {
+            try
+            {
+                string exe = Application.ExecutablePath;
+                if (!string.IsNullOrEmpty(exe) && File.Exists(exe))
+                {
+                    Icon embedded = Icon.ExtractAssociatedIcon(exe);
+                    if (embedded != null) return embedded;
+                }
+            }
+            catch { }
             using (Bitmap bmp = new Bitmap(32, 32))
             {
                 using (Graphics g = Graphics.FromImage(bmp))

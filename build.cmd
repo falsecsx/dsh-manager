@@ -14,7 +14,7 @@ if not exist "%CSC%" (
   exit /b 1
 )
 
-"%CSC%" /nologo /codepage:65001 /target:winexe /optimize+ /platform:anycpu /win32manifest:app.manifest /resource:dsh-gpt-compat.cjs,DeepSeekHarness.GptCompat.cjs /out:"DSH Manager.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Runtime.Serialization.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /r:System.Management.dll dsh-manager.cs
+"%CSC%" /nologo /codepage:65001 /target:winexe /optimize+ /platform:anycpu /win32manifest:app.manifest /win32icon:dsh-manager.ico /resource:dsh-gpt-compat.cjs,DeepSeekHarness.GptCompat.cjs /out:"DSH Manager.exe" /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Runtime.Serialization.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /r:System.Management.dll dsh-manager.cs
 
 if errorlevel 1 (
   echo.
