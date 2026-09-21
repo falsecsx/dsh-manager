@@ -8,7 +8,7 @@
 
 Windows 用户可以直接下载最新版本，无需安装编译工具：
 
-[下载 DSH Manager v1.0.0](https://github.com/falsecsx/dsh-manager/releases/download/v1.0.0/DSH%20Manager.exe)
+[下载 DSH Manager v1.0.0](https://github.com/falsecsx/dsh-manager/releases/download/v1.0.0/DSH.Manager.exe)
 
 下载后双击 `DSH Manager.exe` 即可运行。管理器启动时会自动检测 DeepSeek Harness；如果没有找到，可以选择已有安装目录，或使用“下载并安装 DSH”自动下载官方 DSH 包。首次运行需要 Windows .NET Framework 4.x，程序本身不需要 Node.js，缺少 Node.js 时会尝试自动安装。
 
