@@ -440,7 +440,7 @@ public class DshManagerForm : Form
             chkGptCompatibility = NewCheckBox("启用 GPT 工具调用兼容修复"); chkGptCompatibility.Checked = gptCompatFixEnabled; chkGptCompatibility.CheckedChanged += ChkGptCompatibility_CheckedChanged;
             chkReasoningControl = NewCheckBox("启用模型思考强度调节"); chkReasoningControl.Checked = reasoningControlEnabled; chkReasoningControl.CheckedChanged += ChkReasoningControl_CheckedChanged;
             AddRow(compat, CompatibilityRow(chkGptCompatibility, "修复 GPT Responses 工具调用兼容性"));
-            AddRow(compat, CompatibilityRow(chkReasoningControl, "在 DSH 中选择 Low / Medium / High / Xhigh / Max"));
+            AddRow(compat, CompatibilityRow(chkReasoningControl, "为所有 openai-responses 模型提供 Low / Medium / High / Xhigh / Max"));
             AddRow(manageLayout, Card(compat));
 
             var log = Stack(); var logHeader = Grid(100, 0);

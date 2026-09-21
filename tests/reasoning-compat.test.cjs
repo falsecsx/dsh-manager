@@ -11,7 +11,7 @@ async function main() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-reasoning-test-'));
   const target = path.join(root, 'settings.yaml');
   const stateRoot = path.join(root, 'manager');
-  const original = Buffer.from('llm-pi-ai:\n  providers:\n    falsefi:\n      api: openai-responses\n      models:\n        - id: gpt-test\n          reasoningEfforts:\n            medium: custom-medium\n    deepseek:\n      api: openai-responses\n      models:\n        - id: deepseek-test\n');
+  const original = Buffer.from('llm-pi-ai:\n  providers:\n    falsefi:\n      api: openai-responses\n      models:\n        - id: gpt-test\n          reasoningEfforts:\n            medium: custom-medium\n    deepseek:\n      api: openai-responses\n      models:\n        - id: deepseek-test\n    chat:\n      api: openai-completions\n      models:\n        - id: chat-test\n');
   fs.writeFileSync(target, original);
   const options = { target, stateRoot, installDir };
 
@@ -19,7 +19,8 @@ async function main() {
   let settings = yaml.load(fs.readFileSync(target, 'utf8'));
   const model = settings['llm-pi-ai'].providers.falsefi.models[0];
   assert.deepEqual(model.reasoningEfforts, { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' });
-  assert.equal(settings['llm-pi-ai'].providers.deepseek.models[0].reasoningEfforts, undefined);
+  assert.deepEqual(settings['llm-pi-ai'].providers.deepseek.models[0].reasoningEfforts, { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' });
+  assert.equal(settings['llm-pi-ai'].providers.chat.models[0].reasoningEfforts, undefined);
 
   await run({ ...options, mode: 'on' });
   settings = yaml.load(fs.readFileSync(target, 'utf8'));

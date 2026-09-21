@@ -24,12 +24,13 @@ function patchYaml(original, installDir, features) {
   const { yaml, settings } = parseYaml(original, installDir); const routes = [];
   for (const [id, route] of Object.entries(settings['llm-pi-ai']?.providers || {})) {
     if (!route || route.api !== 'openai-responses' || !Array.isArray(route.models)) continue;
-    const models = route.models.filter(m => m && /^gpt-/i.test(m.id)); if (!models.length) continue;
-    if (features.strict) { if (route.compat != null && (typeof route.compat !== 'object' || Array.isArray(route.compat))) throw new Error('GPT 路由 compat 配置无效：' + id); route.compat ||= {}; route.compat.supportsStrictMode = true; for (const model of models) { if (model.compat != null && (typeof model.compat !== 'object' || Array.isArray(model.compat))) throw new Error('GPT 模型 compat 配置无效：' + model.id); if (model.compat && Object.hasOwn(model.compat, 'supportsStrictMode') && model.compat.supportsStrictMode !== true) model.compat.supportsStrictMode = true; } }
-    if (features.reasoning) for (const model of models) model.reasoningEfforts = { ...REASONING };
-    routes.push(id);
+    const reasoningModels = route.models.filter(m => m && typeof m === 'object' && typeof m.id === 'string' && m.id.trim());
+    const strictModels = reasoningModels.filter(m => /^gpt-/i.test(m.id));
+    if (features.strict && strictModels.length) { if (route.compat != null && (typeof route.compat !== 'object' || Array.isArray(route.compat))) throw new Error('GPT 路由 compat 配置无效：' + id); route.compat ||= {}; route.compat.supportsStrictMode = true; for (const model of strictModels) { if (model.compat != null && (typeof model.compat !== 'object' || Array.isArray(model.compat))) throw new Error('GPT 模型 compat 配置无效：' + model.id); if (model.compat && Object.hasOwn(model.compat, 'supportsStrictMode') && model.compat.supportsStrictMode !== true) model.compat.supportsStrictMode = true; } }
+    if (features.reasoning) for (const model of reasoningModels) model.reasoningEfforts = { ...REASONING };
+    if ((features.strict && strictModels.length) || (features.reasoning && reasoningModels.length)) routes.push(id);
   }
-  if (!routes.length) throw new Error('未找到 openai-responses 的 GPT 路由，请先在 DSH 中配置模型。');
+  if (!routes.length) throw new Error('未找到可处理的 openai-responses 模型，请先在 DSH 中配置模型。');
   const output = Buffer.from(yaml.dump(settings, { noRefs: true, lineWidth: -1, sortKeys: false }), 'utf8'); return { output: output.equals(original) ? original : output, routes, settings };
 }
 async function validate(settings, installDir) { const localRequire = createRequire(path.join(path.resolve(installDir), 'package.json')); const { pathToFileURL } = require('node:url'); const { Config } = await import(pathToFileURL(localRequire.resolve('@deepseek-ai/dsh-llm-pi-ai')).href); Config(settings['llm-pi-ai']); }
