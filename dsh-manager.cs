@@ -1177,7 +1177,7 @@ public class DshManagerForm : Form
         {
             string target = GetDshSettingsYamlPath();
             if (!reasoningControlEnabled && !File.Exists(GetGptCompatStatePath())) return true;
-            if (reasoningControlEnabled && !File.Exists(target)) { Log("[思考强度] 未找到 DSH 配置: " + target); return false; }
+            if (reasoningControlEnabled && !File.Exists(target)) { Log("[思考强度] 尚未生成 DSH 配置，将在 DSH 启动后自动应用。"); return true; }
             return RunGptCompatibility(reasoningControlEnabled ? "reasoning-on" : "reasoning-off");
         }
 
@@ -1187,8 +1187,8 @@ public class DshManagerForm : Form
             if (!gptCompatFixEnabled && !File.Exists(GetGptCompatStatePath())) return true;
             if (gptCompatFixEnabled && !File.Exists(target))
             {
-                Log("[GPT 兼容] 未找到 DSH 配置: " + target);
-                return false;
+                Log("[GPT 兼容] 尚未生成 DSH 配置，将在 DSH 启动后自动应用。");
+                return true;
             }
             return RunGptCompatibility(gptCompatFixEnabled ? "on" : "off");
         }
@@ -1528,6 +1528,14 @@ public class DshManagerForm : Form
                 dshProcess.StartInfo.WorkingDirectory = installDir;
                 dshProcess.StartInfo.UseShellExecute = false;
                 dshProcess.StartInfo.CreateNoWindow = true;
+                string resolvedDshHome = FindDshHome();
+                if (!string.IsNullOrEmpty(resolvedDshHome))
+                {
+                    dshHome = resolvedDshHome;
+                    SaveSettings();
+                    dshProcess.StartInfo.EnvironmentVariables["DSH_HOME"] = resolvedDshHome;
+                    Log("[DSH] 使用配置目录: " + resolvedDshHome);
+                }
                 dshProcess.StartInfo.RedirectStandardOutput = true;
                 dshProcess.StartInfo.RedirectStandardError = true;
                 dshProcess.EnableRaisingEvents = true;
