@@ -789,6 +789,14 @@ public class DshManagerForm : Form
                 SaveSettings();
                 Log("[检测] 已找到 DeepSeek Harness: " + discovered);
             }
+            string relatedHome = FindRelatedDshHome(discovered ?? installDir);
+            if (!string.IsNullOrEmpty(relatedHome) && !string.Equals(dshHome, relatedHome, StringComparison.OrdinalIgnoreCase))
+            {
+                dshHome = relatedHome;
+                if (lblDshHome != null) lblDshHome.Text = "配置目录: " + dshHome;
+                SaveSettings();
+                Log("[检测] 已关联 DSH 数据目录: " + dshHome);
+            }
             string detectedHome = FindDshHome();
             if (!string.IsNullOrEmpty(detectedHome) && !string.Equals(dshHome, detectedHome, StringComparison.OrdinalIgnoreCase))
             {
@@ -893,6 +901,19 @@ public class DshManagerForm : Form
             catch { return false; }
         }
 
+        private static bool HasDshLauncher(string dir)
+        {
+            if (string.IsNullOrWhiteSpace(dir)) return false;
+            try
+            {
+                return File.Exists(Path.Combine(dir, "start-DeepSeek-Harness.cmd")) ||
+                    File.Exists(Path.Combine(dir, "Start-DeepSeek-Harness.ps1")) ||
+                    File.Exists(Path.Combine(dir, "start-dsh.cmd")) ||
+                    File.Exists(Path.Combine(dir, "start-dsh.ps1"));
+            }
+            catch { return false; }
+        }
+
         private static string FindDshInstallBelow(string root, int depth)
         {
             if (string.IsNullOrWhiteSpace(root) || depth < 0) return null;
@@ -902,6 +923,11 @@ public class DshManagerForm : Form
                 if (IsDshInstallDirectory(full)) return full;
                 string runtime = Path.Combine(full, "runtime");
                 if (IsDshInstallDirectory(runtime)) return Path.GetFullPath(runtime);
+                foreach (string name in new[] { "app", "dist", "node", "runtime-node" })
+                {
+                    string nested = Path.Combine(full, name);
+                    if (IsDshInstallDirectory(nested)) return Path.GetFullPath(nested);
+                }
                 if (IsDshPackageDirectory(full))
                 {
                     DirectoryInfo package = new DirectoryInfo(full);
@@ -953,8 +979,15 @@ public class DshManagerForm : Form
             if (!string.IsNullOrEmpty(installDir))
             {
                 add(Path.Combine(installDir, "data"));
+                add(Path.Combine(installDir, ".dsh"));
+                add(Path.Combine(installDir, "config"));
                 DirectoryInfo installParent = Directory.GetParent(installDir);
-                if (installParent != null) add(Path.Combine(installParent.FullName, "data"));
+                for (int i = 0; installParent != null && i < 4; i++, installParent = installParent.Parent)
+                {
+                    add(Path.Combine(installParent.FullName, "data"));
+                    add(Path.Combine(installParent.FullName, ".dsh"));
+                    add(Path.Combine(installParent.FullName, "config"));
+                }
             }
             try
             {
@@ -1001,6 +1034,25 @@ public class DshManagerForm : Form
             }
             catch { }
             return score;
+        }
+
+        private static string FindRelatedDshHome(string install)
+        {
+            try
+            {
+                DirectoryInfo current = new DirectoryInfo(install);
+                for (int i = 0; current != null && i < 6; i++, current = current.Parent)
+                {
+                    foreach (string name in new[] { "data", ".dsh", "config" })
+                    {
+                        string candidate = Path.Combine(current.FullName, name);
+                        if (IsDshHomeDirectory(candidate)) return candidate;
+                    }
+                    if (IsDshHomeDirectory(current.FullName)) return current.FullName;
+                }
+            }
+            catch { }
+            return null;
         }
 
         private string FindDshInstallDirectory(string preferred)
