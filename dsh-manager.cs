@@ -1218,6 +1218,11 @@ public class DshManagerForm : Form
                 return false;
             }
             string target = GetDshSettingsYamlPath();
+            if (!File.Exists(target))
+            {
+                Log("[" + featureLabel + "] 未找到 DSH 配置文件，已跳过修改: " + target);
+                return false;
+            }
             string node = FindNode();
             if (string.IsNullOrEmpty(node))
             {
