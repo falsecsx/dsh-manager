@@ -190,7 +190,7 @@ public class DshManagerForm : Form
         // 控件
         private TextBox txtInstallDir;
         private Label lblDshHome;
-        private Button btnBrowse, btnInstall, btnStart, btnStop, btnAppWindow, btnOpenBrowser, btnCopyUrl;
+        private Button btnBrowse, btnMergeData, btnInstall, btnStart, btnStop, btnAppWindow, btnOpenBrowser, btnCopyUrl;
         private RichTextBox txtLog;
         private Label lblStatus;
         private LinkLabel lblUrl;
@@ -442,6 +442,8 @@ public class DshManagerForm : Form
             btnBrowse.Margin = new Padding(0, 0, 0, 6); path.Controls.Add(btnBrowse, 2, 0); AddRow(settings, path);
             lblDshHome = BodyLabel("配置目录: " + (string.IsNullOrEmpty(dshHome) ? "自动检测中" : dshHome));
             lblDshHome.ForeColor = TextSecondary; lblDshHome.AutoEllipsis = true; lblDshHome.Margin = new Padding(0, 0, 0, 6); AddRow(settings, lblDshHome);
+            btnMergeData = ActionButton("合并其他 DSH 数据", false, (s, e) => MergeDshData());
+            btnMergeData.Margin = new Padding(0, 0, 0, 6); AddRow(settings, btnMergeData);
             chkAutoUpdate = NewCheckBox("启动时自动更新"); chkAutoOpen = NewCheckBox("启动后自动打开界面"); chkAppWindow = NewCheckBox("使用应用窗口");
             AddRow(settings, Flow(chkAutoUpdate, chkAutoOpen, chkAppWindow)); AddRow(manageLayout, Card(settings));
 
@@ -1067,6 +1069,54 @@ public class DshManagerForm : Form
                 ReconcileReasoningControl();
             }
         }
+
+        private List<string> FindDshHomeCandidates()
+        {
+            var result = new List<string>();
+            Action<string> add = p => { if (!string.IsNullOrWhiteSpace(p)) { try { string f = Path.GetFullPath(p); if (IsDshHomeDirectory(f) && !result.Any(x => string.Equals(x, f, StringComparison.OrdinalIgnoreCase))) result.Add(f); } catch { } } };
+            add(dshHome); add(Environment.GetEnvironmentVariable("DSH_HOME"));
+            string user = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            add(Path.Combine(user, ".dsh"));
+            DirectoryInfo parent = Directory.GetParent(user);
+            if (parent != null && Directory.Exists(parent.FullName)) foreach (string profile in Directory.GetDirectories(parent.FullName)) add(Path.Combine(profile, ".dsh"));
+            return result;
+        }
+
+        private void MergeDshData()
+        {
+            if (dshSetupBusy) return;
+            string runningError;
+            if (DshBlocksCompatibility(out runningError)) { MessageBox.Show(this, "请先停止 DSH，再合并数据。", "无法合并", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+            string target = FindDshHome();
+            if (string.IsNullOrEmpty(target)) { MessageBox.Show(this, "没有找到可用的 DSH 配置目录。", "无法合并", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+            var sources = FindDshHomeCandidates().Where(x => !string.Equals(x, target, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (sources.Count == 0) { MessageBox.Show(this, "没有发现其他 DSH 数据目录。", "无需合并", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+            string resource = "DeepSeekHarness.DshDataMerge.cjs";
+            string scriptPath = Path.Combine(Path.GetTempPath(), "dsh-data-merge-" + Guid.NewGuid().ToString("N") + ".cjs");
+            string report = Path.Combine(Path.GetTempPath(), "dsh-data-merge-report-" + Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                using (Stream input = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream(resource))
+                using (FileStream output = File.Create(scriptPath)) { if (input == null) throw new InvalidOperationException("内置数据合并脚本缺失。"); input.CopyTo(output); }
+                string json = "[" + string.Join(",", sources.Select(QuoteJson)) + "]";
+                Process p = StartProc(FindNode(), string.Join(" ", new[] { scriptPath, target, json, installDir ?? "", report }.Select(QuoteProcessArgument)), installDir);
+                p.WaitForExit(120000);
+                if (!File.Exists(report)) throw new InvalidOperationException("未收到合并结果。");
+                string result = File.ReadAllText(report);
+                if (result.IndexOf("\"ok\":true", StringComparison.OrdinalIgnoreCase) < 0) throw new InvalidOperationException(result);
+                dshHome = target; SaveSettings();
+                Log("[数据合并] 已合并其他 DSH 配置、对话和存储数据。目标: " + target);
+                MessageBox.Show(this, "DSH 数据已合并。请重新启动 DSH 以加载合并后的对话和供应商。", "合并完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex) { Log("[数据合并] 失败: " + ex.Message); MessageBox.Show(this, "合并失败: " + ex.Message, "合并失败", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            finally { try { if (File.Exists(scriptPath)) File.Delete(scriptPath); if (File.Exists(report)) File.Delete(report); } catch { } }
+        }
+
+        private static string QuoteJson(string value)
+        {
+            return "\"" + (value ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        }
+
 
         private void PromptForInstallDirectory()
         {
