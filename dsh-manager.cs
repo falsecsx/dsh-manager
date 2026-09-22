@@ -190,12 +190,12 @@ public class DshManagerForm : Form
         // 控件
         private TextBox txtInstallDir;
         private Label lblDshHome;
-        private Button btnBrowse, btnMergeData, btnInstall, btnStart, btnStop, btnAppWindow, btnOpenBrowser, btnCopyUrl;
+        private Button btnBrowse, btnInstall, btnStart, btnStop, btnAppWindow, btnOpenBrowser, btnCopyUrl;
         private RichTextBox txtLog;
         private Label lblStatus;
         private LinkLabel lblUrl;
         private Label lblTokenBadge;
-        private CheckBox chkAutoUpdate, chkAutoOpen, chkAppWindow, chkGptCompatibility, chkReasoningControl;
+        private CheckBox chkAutoUpdate, chkAutoOpen, chkAppWindow, chkGptCompatibility, chkReasoningControl, chkMergeData;
         private NumericUpDown nudPort;
         private TabControl tabControl;
         private BrandProgressBar progressBar;
@@ -442,8 +442,8 @@ public class DshManagerForm : Form
             btnBrowse.Margin = new Padding(0, 0, 0, 6); path.Controls.Add(btnBrowse, 2, 0); AddRow(settings, path);
             lblDshHome = BodyLabel("配置目录: " + (string.IsNullOrEmpty(dshHome) ? "自动检测中" : dshHome));
             lblDshHome.ForeColor = TextSecondary; lblDshHome.AutoEllipsis = true; lblDshHome.Margin = new Padding(0, 0, 0, 6); AddRow(settings, lblDshHome);
-            btnMergeData = ActionButton("合并其他 DSH 数据", false, (s, e) => MergeDshData());
-            btnMergeData.Margin = new Padding(0, 0, 0, 6); AddRow(settings, btnMergeData);
+            chkMergeData = NewCheckBox("合并其他 DSH 数据（一次性操作）"); chkMergeData.CheckedChanged += ChkMergeData_CheckedChanged;
+            AddRow(settings, chkMergeData);
             chkAutoUpdate = NewCheckBox("启动时自动更新"); chkAutoOpen = NewCheckBox("启动后自动打开界面"); chkAppWindow = NewCheckBox("使用应用窗口");
             AddRow(settings, Flow(chkAutoUpdate, chkAutoOpen, chkAppWindow)); AddRow(manageLayout, Card(settings));
 
@@ -1179,6 +1179,18 @@ public class DshManagerForm : Form
             }
             catch (Exception ex) { Log("[数据合并] 失败: " + ex.Message); MessageBox.Show(this, "合并失败: " + ex.Message, "合并失败", MessageBoxButtons.OK, MessageBoxIcon.Error); }
             finally { try { if (File.Exists(scriptPath)) File.Delete(scriptPath); if (File.Exists(report)) File.Delete(report); } catch { } }
+        }
+
+        private void ChkMergeData_CheckedChanged(object sender, EventArgs e)
+        {
+            if (chkMergeData == null || !chkMergeData.Checked) return;
+            try { MergeDshData(); }
+            finally
+            {
+                chkMergeData.CheckedChanged -= ChkMergeData_CheckedChanged;
+                chkMergeData.Checked = false;
+                chkMergeData.CheckedChanged += ChkMergeData_CheckedChanged;
+            }
         }
 
         private static string QuoteJson(string value)
