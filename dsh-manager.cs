@@ -780,14 +780,6 @@ public class DshManagerForm : Form
 
         private void CheckInstallation()
         {
-            string detectedHome = FindDshHome();
-            if (!string.IsNullOrEmpty(detectedHome) && !string.Equals(dshHome, detectedHome, StringComparison.OrdinalIgnoreCase))
-            {
-                dshHome = detectedHome;
-                if (lblDshHome != null) lblDshHome.Text = "配置目录: " + dshHome;
-                SaveSettings();
-                Log("[检测] 已找到 DSH 配置目录: " + detectedHome);
-            }
             string discovered = FindDshInstallDirectory(installDir);
             bool installed = !string.IsNullOrEmpty(discovered);
             if (installed && !string.Equals(Path.GetFullPath(installDir ?? ""), Path.GetFullPath(discovered), StringComparison.OrdinalIgnoreCase))
@@ -796,6 +788,14 @@ public class DshManagerForm : Form
                 if (txtInstallDir != null) txtInstallDir.Text = discovered;
                 SaveSettings();
                 Log("[检测] 已找到 DeepSeek Harness: " + discovered);
+            }
+            string detectedHome = FindDshHome();
+            if (!string.IsNullOrEmpty(detectedHome) && !string.Equals(dshHome, detectedHome, StringComparison.OrdinalIgnoreCase))
+            {
+                dshHome = detectedHome;
+                if (lblDshHome != null) lblDshHome.Text = "配置目录: " + dshHome;
+                SaveSettings();
+                Log("[检测] 已找到 DSH 配置目录: " + detectedHome);
             }
             installationFound = installed;
 
@@ -900,6 +900,8 @@ public class DshManagerForm : Form
             {
                 string full = Path.GetFullPath(root);
                 if (IsDshInstallDirectory(full)) return full;
+                string runtime = Path.Combine(full, "runtime");
+                if (IsDshInstallDirectory(runtime)) return Path.GetFullPath(runtime);
                 if (IsDshPackageDirectory(full))
                 {
                     DirectoryInfo package = new DirectoryInfo(full);
@@ -948,6 +950,12 @@ public class DshManagerForm : Form
             add(Path.Combine(user, ".dsh"));
             add(Path.Combine(local, "DeepSeek-Harness"));
             add(Path.Combine(roaming, "DeepSeek-Harness"));
+            if (!string.IsNullOrEmpty(installDir))
+            {
+                add(Path.Combine(installDir, "data"));
+                DirectoryInfo installParent = Directory.GetParent(installDir);
+                if (installParent != null) add(Path.Combine(installParent.FullName, "data"));
+            }
             try
             {
                 DirectoryInfo userParent = Directory.GetParent(user);
@@ -1009,6 +1017,12 @@ public class DshManagerForm : Form
             add(Path.Combine(local, "DeepSeek-Harness"));
             add(Path.Combine(local, "Programs", "DeepSeek-Harness"));
             add(Path.Combine(roaming, "DeepSeek-Harness"));
+            foreach (DriveInfo drive in DriveInfo.GetDrives())
+            {
+                if (!drive.IsReady) continue;
+                add(Path.Combine(drive.RootDirectory.FullName, "DeepSeek-Harness"));
+                add(Path.Combine(drive.RootDirectory.FullName, "Deepseek-Harness"));
+            }
             add(Path.Combine(roaming, "npm"));
             add(Path.Combine(roaming, "npm", "node_modules"));
             add(Path.Combine(local, "npm"));
@@ -1045,6 +1059,9 @@ public class DshManagerForm : Form
                 if (!string.IsNullOrEmpty(selectedInstall))
                 {
                     installDir = selectedInstall;
+                    DirectoryInfo installParent = Directory.GetParent(selectedInstall);
+                    string siblingData = installParent == null ? null : Path.Combine(installParent.FullName, "data");
+                    if (IsDshHomeDirectory(siblingData)) dshHome = Path.GetFullPath(siblingData);
                     installationFound = true;
                     if (txtInstallDir != null) txtInstallDir.Text = installDir;
                     Log("[设置] 已选择 DSH 安装目录: " + installDir);
