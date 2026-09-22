@@ -23,14 +23,20 @@ const REASONING = { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', 
 function patchYaml(original, installDir, features) {
   const { yaml, settings } = parseYaml(original, installDir); const routes = [];
   for (const [id, route] of Object.entries(settings['llm-pi-ai']?.providers || {})) {
-    if (!route || route.api !== 'openai-responses' || !Array.isArray(route.models)) continue;
+    if (!route || !['openai-responses', 'openai-completions', 'anthropic-messages'].includes(route.api) || !Array.isArray(route.models)) continue;
     const reasoningModels = route.models.filter(m => m && typeof m === 'object' && typeof m.id === 'string' && m.id.trim());
-    const strictModels = reasoningModels.filter(m => /^gpt-/i.test(m.id));
+    const strictModels = route.api === 'openai-responses' ? reasoningModels.filter(m => /^gpt-/i.test(m.id)) : [];
     if (features.strict && strictModels.length) { if (route.compat != null && (typeof route.compat !== 'object' || Array.isArray(route.compat))) throw new Error('GPT 路由 compat 配置无效：' + id); route.compat ||= {}; route.compat.supportsStrictMode = true; for (const model of strictModels) { if (model.compat != null && (typeof model.compat !== 'object' || Array.isArray(model.compat))) throw new Error('GPT 模型 compat 配置无效：' + model.id); if (model.compat && Object.hasOwn(model.compat, 'supportsStrictMode') && model.compat.supportsStrictMode !== true) model.compat.supportsStrictMode = true; } }
-    if (features.reasoning) for (const model of reasoningModels) model.reasoningEfforts = { ...REASONING };
+    if (features.reasoning) {
+      if (route.compat != null && (typeof route.compat !== 'object' || Array.isArray(route.compat))) throw new Error('模型思考强度 compat 配置无效：' + id);
+      route.compat ||= {};
+      if (route.api === 'openai-completions') route.compat.supportsReasoningEffort = true;
+      if (route.api === 'anthropic-messages') route.compat.forceAdaptiveThinking = true;
+      for (const model of reasoningModels) model.reasoningEfforts = { ...REASONING };
+    }
     if ((features.strict && strictModels.length) || (features.reasoning && reasoningModels.length)) routes.push(id);
   }
-  if (!routes.length) throw new Error('未找到可处理的 openai-responses 模型，请先在 DSH 中配置模型。');
+  if (!routes.length) throw new Error('未找到可处理的 Responses、Completions 或 Anthropic 模型，请先在 DSH 中配置模型。');
   const output = Buffer.from(yaml.dump(settings, { noRefs: true, lineWidth: -1, sortKeys: false }), 'utf8'); return { output: output.equals(original) ? original : output, routes, settings };
 }
 function restoreManagedFields(current, original, installDir, features) {
@@ -39,6 +45,14 @@ function restoreManagedFields(current, original, installDir, features) {
   for (const [id, route] of Object.entries(currentProviders)) {
     if (!route || typeof route !== 'object') continue;
     const baseRoute = baselineProviders[id];
+    if (!features.reasoning && route.compat && typeof route.compat === 'object') {
+      for (const field of ['supportsReasoningEffort', 'forceAdaptiveThinking']) {
+        if (!Object.hasOwn(route.compat, field)) continue;
+        if (baseRoute?.compat && typeof baseRoute.compat === 'object' && Object.hasOwn(baseRoute.compat, field)) route.compat[field] = baseRoute.compat[field];
+        else delete route.compat[field];
+      }
+      if (!Object.keys(route.compat).length) delete route.compat;
+    }
     if (!features.strict && /^object$/.test(typeof route.compat) && route.compat && Object.hasOwn(route.compat, 'supportsStrictMode')) {
       if (baseRoute?.compat && typeof baseRoute.compat === 'object' && Object.hasOwn(baseRoute.compat, 'supportsStrictMode')) route.compat.supportsStrictMode = baseRoute.compat.supportsStrictMode;
       else delete route.compat.supportsStrictMode;

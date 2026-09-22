@@ -20,7 +20,8 @@ async function main() {
   const model = settings['llm-pi-ai'].providers.falsefi.models[0];
   assert.deepEqual(model.reasoningEfforts, { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' });
   assert.deepEqual(settings['llm-pi-ai'].providers.deepseek.models[0].reasoningEfforts, { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' });
-  assert.equal(settings['llm-pi-ai'].providers.chat.models[0].reasoningEfforts, undefined);
+  assert.deepEqual(settings['llm-pi-ai'].providers.chat.models[0].reasoningEfforts, { low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' });
+  assert.equal(settings['llm-pi-ai'].providers.chat.compat.supportsReasoningEffort, true);
 
   await run({ ...options, mode: 'on' });
   settings = yaml.load(fs.readFileSync(target, 'utf8'));
@@ -31,6 +32,7 @@ async function main() {
   settings = yaml.load(fs.readFileSync(target, 'utf8'));
   assert.equal(settings['llm-pi-ai'].providers.falsefi.compat.supportsStrictMode, true);
   assert.deepEqual(settings['llm-pi-ai'].providers.falsefi.models[0].reasoningEfforts, { medium: 'custom-medium' });
+  assert.equal(settings['llm-pi-ai'].providers.chat.compat, undefined);
 
   await run({ ...options, mode: 'off' });
   assert.deepEqual(fs.readFileSync(target), original);

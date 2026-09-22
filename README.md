@@ -19,7 +19,7 @@ Windows 用户可以直接下载最新版本，无需安装编译工具：
 - 浏览、筛选和下载 DSH 社区插件
 - 管理美化插件的启用和停用状态
 - 可选启用 GPT 工具调用兼容修复
-- 可选为所有 `openai-responses` 模型显示 `low / medium / high / xhigh / max` 思考强度
+- 可选为 `openai-responses`、`openai-completions` 和 `anthropic-messages` 模型显示兼容的思考强度选项
 - 保留配置备份，关闭补丁时恢复用户原始配置
 
 ## 构建

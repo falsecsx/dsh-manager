@@ -451,7 +451,7 @@ public class DshManagerForm : Form
             chkGptCompatibility = NewCheckBox("启用 GPT 工具调用兼容修复"); chkGptCompatibility.Checked = gptCompatFixEnabled; chkGptCompatibility.CheckedChanged += ChkGptCompatibility_CheckedChanged;
             chkReasoningControl = NewCheckBox("启用模型思考强度调节"); chkReasoningControl.Checked = reasoningControlEnabled; chkReasoningControl.CheckedChanged += ChkReasoningControl_CheckedChanged;
             AddRow(compat, CompatibilityRow(chkGptCompatibility, "修复 GPT Responses 工具调用兼容性"));
-            AddRow(compat, CompatibilityRow(chkReasoningControl, "为所有 openai-responses 模型提供 Low / Medium / High / Xhigh / Max"));
+            AddRow(compat, CompatibilityRow(chkReasoningControl, "为 Responses、Completions 和 Anthropic 模型提供兼容的思考强度选项"));
             AddRow(manageLayout, Card(compat));
 
             var log = Stack(); var logHeader = Grid(100, 0);
@@ -1207,8 +1207,8 @@ public class DshManagerForm : Form
                 Log("[数据合并] 来源 " + sourceCount + " 个，新增供应商 " + providers + "，新增模型 " + models + "，复制文件 " + files + "。可处理 Responses 路由 " + responseRoutes + " 个、模型 " + responseModels + " 个。");
                 if (responseModels == 0)
                 {
-                    Log("[数据合并] 目标配置中没有可处理的 openai-responses 模型，请检查实际 DSH_HOME 和 settings.yaml。");
-                    MessageBox.Show(this, "合并完成，但目标配置中没有可处理的 openai-responses 模型。\n\n请检查 DSH_HOME 和 settings.yaml 是否为原来的配置。", "合并结果", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Log("[数据合并] 目标配置中没有可处理的 Responses、Completions 或 Anthropic 模型，请检查实际 DSH_HOME 和 settings.yaml。");
+                    MessageBox.Show(this, "合并完成，但目标配置中没有可处理的 Responses、Completions 或 Anthropic 模型。\n\n请检查 DSH_HOME 和 settings.yaml 是否为原来的配置。", "合并结果", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
                 ReconcileReasoningControl();
