@@ -189,6 +189,7 @@ public class DshManagerForm : Form
 
         // 控件
         private TextBox txtInstallDir;
+        private Label lblDshHome;
         private Button btnBrowse, btnInstall, btnStart, btnStop, btnAppWindow, btnOpenBrowser, btnCopyUrl;
         private RichTextBox txtLog;
         private Label lblStatus;
@@ -238,6 +239,7 @@ public class DshManagerForm : Form
         private Process dshProcess;
         private bool isRunning = false;
         private string installDir;
+        private string dshHome;
         private string pluginServer = "";
         private string currentUrl = "http://127.0.0.1:3080";
         // 新版 dsh（0.1.1+）启动时会打印一行 "dsh web: http://127.0.0.1:PORT/?token=xxxx"，
@@ -436,8 +438,10 @@ public class DshManagerForm : Form
             var path = Grid(0, 100, 0);
             var pathLabel = BodyLabel("安装目录"); pathLabel.Margin = new Padding(0, 0, 12, 0); path.Controls.Add(pathLabel, 0, 0);
             txtInstallDir = new TextBox { Text = installDir, Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle, Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = new Padding(0, 5, 12, 5) }; path.Controls.Add(txtInstallDir, 1, 0);
-            btnBrowse = ActionButton("选择已有安装", false, (s, e) => SelectInstallDirectory());
+            btnBrowse = ActionButton("选择已有安装/配置", false, (s, e) => SelectInstallDirectory());
             btnBrowse.Margin = new Padding(0, 0, 0, 6); path.Controls.Add(btnBrowse, 2, 0); AddRow(settings, path);
+            lblDshHome = BodyLabel("配置目录: " + (string.IsNullOrEmpty(dshHome) ? "自动检测中" : dshHome));
+            lblDshHome.ForeColor = TextSecondary; lblDshHome.AutoEllipsis = true; lblDshHome.Margin = new Padding(0, 0, 0, 6); AddRow(settings, lblDshHome);
             chkAutoUpdate = NewCheckBox("启动时自动更新"); chkAutoOpen = NewCheckBox("启动后自动打开界面"); chkAppWindow = NewCheckBox("使用应用窗口");
             AddRow(settings, Flow(chkAutoUpdate, chkAutoOpen, chkAppWindow)); AddRow(manageLayout, Card(settings));
 
@@ -774,6 +778,14 @@ public class DshManagerForm : Form
 
         private void CheckInstallation()
         {
+            string detectedHome = FindDshHome();
+            if (!string.IsNullOrEmpty(detectedHome) && !string.Equals(dshHome, detectedHome, StringComparison.OrdinalIgnoreCase))
+            {
+                dshHome = detectedHome;
+                if (lblDshHome != null) lblDshHome.Text = "配置目录: " + dshHome;
+                SaveSettings();
+                Log("[检测] 已找到 DSH 配置目录: " + detectedHome);
+            }
             string discovered = FindDshInstallDirectory(installDir);
             bool installed = !string.IsNullOrEmpty(discovered);
             if (installed && !string.Equals(Path.GetFullPath(installDir ?? ""), Path.GetFullPath(discovered), StringComparison.OrdinalIgnoreCase))
@@ -879,6 +891,33 @@ public class DshManagerForm : Form
             catch { return false; }
         }
 
+        private static bool IsDshHomeDirectory(string dir)
+        {
+            if (string.IsNullOrWhiteSpace(dir)) return false;
+            try { return File.Exists(Path.Combine(dir, "settings.yaml")); }
+            catch { return false; }
+        }
+
+        private string FindDshHome()
+        {
+            var candidates = new List<string>();
+            Action<string> add = p => { if (!string.IsNullOrWhiteSpace(p)) candidates.Add(p); };
+            add(dshHome);
+            add(Environment.GetEnvironmentVariable("DSH_HOME"));
+            add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dsh"));
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string candidate in candidates)
+            {
+                try
+                {
+                    string full = Path.GetFullPath(candidate);
+                    if (seen.Add(full) && IsDshHomeDirectory(full)) return full;
+                }
+                catch { }
+            }
+            return null;
+        }
+
         private string FindDshInstallDirectory(string preferred)
         {
             var candidates = new List<string>();
@@ -913,18 +952,31 @@ public class DshManagerForm : Form
         private void SelectInstallDirectory()
         {
             if (dshSetupBusy) return;
-            using (var dlg = new FolderBrowserDialog { Description = "选择 DeepSeek Harness 的安装目录", SelectedPath = installDir ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ShowNewFolderButton = true })
+            using (var dlg = new FolderBrowserDialog { Description = "选择 DeepSeek Harness 安装目录或配置目录（.dsh）", SelectedPath = installDir ?? dshHome ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ShowNewFolderButton = true })
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 string selected = dlg.SelectedPath;
-                if (!IsDshInstallDirectory(selected))
+                if (IsDshInstallDirectory(selected))
                 {
-                    var result = MessageBox.Show(this, "该目录中没有检测到 DeepSeek Harness。是否仍将它设为下载和安装目录？", "确认安装目录", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-                    if (result != DialogResult.Yes) return;
+                    installDir = Path.GetFullPath(selected);
+                    installationFound = true;
+                    if (txtInstallDir != null) txtInstallDir.Text = installDir;
+                    Log("[设置] 已选择 DSH 安装目录: " + installDir);
                 }
-                installDir = selected;
-                installationFound = IsDshInstallDirectory(selected);
-                if (txtInstallDir != null) txtInstallDir.Text = selected;
+                else if (IsDshHomeDirectory(selected))
+                {
+                    dshHome = Path.GetFullPath(selected);
+                    if (lblDshHome != null) lblDshHome.Text = "配置目录: " + dshHome;
+                    Log("[设置] 已选择 DSH 配置目录: " + dshHome);
+                }
+                else
+                {
+                    var result = MessageBox.Show(this, "该目录中未检测到 DeepSeek Harness 或 settings.yaml。是否仍将它设为下载和安装目录？", "确认安装目录", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                    if (result != DialogResult.Yes) return;
+                    installDir = Path.GetFullPath(selected);
+                    installationFound = false;
+                    if (txtInstallDir != null) txtInstallDir.Text = installDir;
+                }
                 SaveSettings();
                 CheckInstallation();
                 ReconcileGptCompatibility();
@@ -3436,8 +3488,9 @@ fs.writeFileSync(p,JSON.stringify(j,null,2));
 
         private string GetDshHome()
         {
+            if (!string.IsNullOrWhiteSpace(dshHome) && Directory.Exists(dshHome)) return dshHome;
             string h = Environment.GetEnvironmentVariable("DSH_HOME");
-            if (!string.IsNullOrEmpty(h)) return h;
+            if (!string.IsNullOrEmpty(h) && Directory.Exists(h)) return h;
             return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dsh");
         }
 
@@ -3829,6 +3882,7 @@ getBuf(u).then(function(b){fs.writeFileSync(out,b);}).catch(function(e){console.
         private void LoadSettings()
         {
             installDir = null;
+            dshHome = null;
             pluginServer = "";
             gptCompatFixEnabled = false;
             reasoningControlEnabled = false;
@@ -3848,6 +3902,7 @@ getBuf(u).then(function(b){fs.writeFileSync(out,b);}).catch(function(e){console.
                             string key = t.Substring(0, eq).Trim();
                             string val = t.Substring(eq + 1).Trim();
                             if (key == "installDir") installDir = val;
+                            else if (key == "dshHome") dshHome = val;
                             else if (key == "pluginServer") pluginServer = val;
                             else if (key == "gptCompatFixEnabled") gptCompatFixEnabled = string.Equals(val, "true", StringComparison.OrdinalIgnoreCase);
                             else if (key == "reasoningControlEnabled") reasoningControlEnabled = string.Equals(val, "true", StringComparison.OrdinalIgnoreCase);
@@ -3862,6 +3917,7 @@ getBuf(u).then(function(b){fs.writeFileSync(out,b);}).catch(function(e){console.
             }
             catch { }
             if (string.IsNullOrEmpty(installDir) || !Directory.Exists(installDir)) installDir = null;
+            if (string.IsNullOrEmpty(dshHome) || !Directory.Exists(dshHome)) dshHome = null;
         }
 
         private bool SaveSettings()
@@ -3870,6 +3926,7 @@ getBuf(u).then(function(b){fs.writeFileSync(out,b);}).catch(function(e){console.
             {
                 var sb = new StringBuilder();
                 if (!string.IsNullOrEmpty(installDir)) sb.AppendLine("installDir=" + installDir);
+                if (!string.IsNullOrEmpty(dshHome)) sb.AppendLine("dshHome=" + dshHome);
                 if (!string.IsNullOrEmpty(pluginServer)) sb.AppendLine("pluginServer=" + pluginServer);
                 sb.AppendLine("gptCompatFixEnabled=" + (gptCompatFixEnabled ? "true" : "false"));
                 sb.AppendLine("reasoningControlEnabled=" + (reasoningControlEnabled ? "true" : "false"));
