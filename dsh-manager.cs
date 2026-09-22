@@ -886,7 +886,43 @@ public class DshManagerForm : Form
             try
             {
                 string package = Path.Combine(dir, "node_modules", "@deepseek-ai", "dsh");
-                return Directory.Exists(package) && File.Exists(Path.Combine(package, "lib", "bin.js"));
+                return Directory.Exists(package) && File.Exists(Path.Combine(package, "package.json")) && File.Exists(Path.Combine(package, "lib", "bin.js"));
+            }
+            catch { return false; }
+        }
+
+        private static string FindDshInstallBelow(string root, int depth)
+        {
+            if (string.IsNullOrWhiteSpace(root) || depth < 0) return null;
+            try
+            {
+                string full = Path.GetFullPath(root);
+                if (IsDshInstallDirectory(full)) return full;
+                if (IsDshPackageDirectory(full))
+                {
+                    DirectoryInfo package = new DirectoryInfo(full);
+                    if (package.Parent != null && package.Parent.Parent != null && package.Parent.Parent.Parent != null)
+                        return package.Parent.Parent.Parent.FullName;
+                }
+                if (depth == 0 || !Directory.Exists(full)) return null;
+                foreach (string child in Directory.GetDirectories(full))
+                {
+                    string found = FindDshInstallBelow(child, depth - 1);
+                    if (!string.IsNullOrEmpty(found)) return found;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private static bool IsDshPackageDirectory(string dir)
+        {
+            if (string.IsNullOrWhiteSpace(dir)) return false;
+            try
+            {
+                string manifest = Path.Combine(dir, "package.json");
+                return File.Exists(manifest) && File.Exists(Path.Combine(dir, "lib", "bin.js")) &&
+                    File.ReadAllText(manifest).IndexOf("@deepseek-ai/dsh", StringComparison.OrdinalIgnoreCase) >= 0;
             }
             catch { return false; }
         }
@@ -904,7 +940,12 @@ public class DshManagerForm : Form
             Action<string> add = p => { if (!string.IsNullOrWhiteSpace(p)) candidates.Add(p); };
             add(dshHome);
             add(Environment.GetEnvironmentVariable("DSH_HOME"));
-            add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dsh"));
+            string user = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            add(Path.Combine(user, ".dsh"));
+            add(Path.Combine(local, "DeepSeek-Harness"));
+            add(Path.Combine(roaming, "DeepSeek-Harness"));
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (string candidate in candidates)
             {
@@ -932,6 +973,12 @@ public class DshManagerForm : Form
             add(Path.Combine(local, "DeepSeek-Harness"));
             add(Path.Combine(local, "Programs", "DeepSeek-Harness"));
             add(Path.Combine(roaming, "DeepSeek-Harness"));
+            add(Path.Combine(roaming, "npm"));
+            add(Path.Combine(roaming, "npm", "node_modules"));
+            add(Path.Combine(local, "npm"));
+            add(Path.Combine(local, "npm", "node_modules"));
+            add(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
+            add(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
             add(Environment.CurrentDirectory);
             string dshHome = Environment.GetEnvironmentVariable("DSH_HOME");
             add(dshHome);
@@ -942,7 +989,9 @@ public class DshManagerForm : Form
                 try
                 {
                     string full = Path.GetFullPath(candidate);
-                    if (seen.Add(full) && IsDshInstallDirectory(full)) return full;
+                    if (!seen.Add(full)) continue;
+                    string found = FindDshInstallBelow(full, 4);
+                    if (!string.IsNullOrEmpty(found)) return found;
                 }
                 catch { }
             }
@@ -956,9 +1005,10 @@ public class DshManagerForm : Form
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 string selected = dlg.SelectedPath;
-                if (IsDshInstallDirectory(selected))
+                string selectedInstall = FindDshInstallBelow(selected, 4);
+                if (!string.IsNullOrEmpty(selectedInstall))
                 {
-                    installDir = Path.GetFullPath(selected);
+                    installDir = selectedInstall;
                     installationFound = true;
                     if (txtInstallDir != null) txtInstallDir.Text = installDir;
                     Log("[设置] 已选择 DSH 安装目录: " + installDir);
