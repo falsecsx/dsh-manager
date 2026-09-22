@@ -946,17 +946,51 @@ public class DshManagerForm : Form
             add(Path.Combine(user, ".dsh"));
             add(Path.Combine(local, "DeepSeek-Harness"));
             add(Path.Combine(roaming, "DeepSeek-Harness"));
+            try
+            {
+                DirectoryInfo userParent = Directory.GetParent(user);
+                string usersRoot = userParent == null ? null : userParent.FullName;
+                if (!string.IsNullOrEmpty(usersRoot) && Directory.Exists(usersRoot))
+                    foreach (string profile in Directory.GetDirectories(usersRoot)) add(Path.Combine(profile, ".dsh"));
+            }
+            catch { }
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string best = null;
+            int bestScore = 0;
             foreach (string candidate in candidates)
             {
                 try
                 {
                     string full = Path.GetFullPath(candidate);
-                    if (seen.Add(full) && IsDshHomeDirectory(full)) return full;
+                    if (!seen.Add(full) || !IsDshHomeDirectory(full)) continue;
+                    int score = ScoreDshHome(full);
+                    if (score > bestScore) { best = full; bestScore = score; }
                 }
                 catch { }
             }
-            return null;
+            return best;
+        }
+
+        private static int ScoreDshHome(string dir)
+        {
+            int score = 1;
+            try
+            {
+                string settings = Path.Combine(dir, "settings.yaml");
+                string text = File.ReadAllText(settings, Encoding.UTF8);
+                if (text.IndexOf("llm-pi-ai:", StringComparison.OrdinalIgnoreCase) >= 0) score += 20;
+                if (text.IndexOf("models:", StringComparison.OrdinalIgnoreCase) >= 0) score += 20;
+                if (text.IndexOf("openai-responses", StringComparison.OrdinalIgnoreCase) >= 0) score += 10;
+                string sessions = Path.Combine(dir, "sessions");
+                if (Directory.Exists(sessions))
+                {
+                    int count = Directory.EnumerateFiles(sessions, "*", SearchOption.AllDirectories).Take(100).Count();
+                    score += Math.Min(40, count > 0 ? 20 + count : 0);
+                }
+                if (Directory.Exists(Path.Combine(dir, "profiles"))) score += 5;
+            }
+            catch { }
+            return score;
         }
 
         private string FindDshInstallDirectory(string preferred)
