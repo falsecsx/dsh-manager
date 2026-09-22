@@ -19,9 +19,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 
- [assembly: AssemblyVersion("1.0.0.0")]
- [assembly: AssemblyFileVersion("1.0.0.0")]
- [assembly: AssemblyInformationalVersion("1.0.0")]
+ [assembly: AssemblyVersion("1.0.1.0")]
+ [assembly: AssemblyFileVersion("1.0.1.0")]
+ [assembly: AssemblyInformationalVersion("1.0.1")]
 
 namespace DeepSeekHarness
 {
@@ -171,7 +171,7 @@ namespace DeepSeekHarness
 
 public class DshManagerForm : Form
 {
-        private const string ManagerVersion = "1.0.0";
+        private const string ManagerVersion = "1.0.1";
         // 品牌色（与 Web GUI --dsw-static-deepseek-500 一致）
         private static readonly Color BrandBlue = Color.FromArgb(65, 118, 230);
         private static readonly Color BrandBlueHover = Color.FromArgb(56, 108, 224);

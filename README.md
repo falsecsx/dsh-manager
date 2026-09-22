@@ -8,7 +8,7 @@
 
 Windows 用户可以直接下载最新版本，无需安装编译工具：
 
-[下载 DSH Manager v1.0.0](https://github.com/falsecsx/dsh-manager/releases/download/v1.0.0/DSH.Manager.exe)
+[下载 DSH Manager v1.0.1](https://github.com/falsecsx/dsh-manager/releases/download/v1.0.1/DSH.Manager.exe)
 
 下载后双击 `DSH Manager.exe` 即可运行。管理器启动时会自动检测 DeepSeek Harness；如果没有找到，可以选择已有安装目录，或使用“下载并安装 DSH”自动下载官方 DSH 包。首次运行需要 Windows .NET Framework 4.x，程序本身不需要 Node.js，缺少 Node.js 时会尝试自动安装。
 
@@ -21,6 +21,14 @@ Windows 用户可以直接下载最新版本，无需安装编译工具：
 - 可选启用 GPT 工具调用兼容修复
 - 可选为 `openai-responses`、`openai-completions` 和 `anthropic-messages` 模型显示兼容的思考强度选项
 - 保留配置备份，关闭补丁时恢复用户原始配置
+
+## v1.0.1 更新说明
+
+- 思考强度调节支持 `openai-responses`、`openai-completions` 和 `anthropic-messages` 三种协议。
+- 兼容不同 DSH 安装布局，包括 `runtime`、`data`、`.dsh`、`config` 和其他磁盘路径。
+- 新增跨用户 DSH 数据合并，可合并供应商、模型、对话、存储和 profile，并在合并后刷新兼容配置。
+- 修复管理器启动后使用错误 DSH_HOME 导致对话记录和供应商消失的问题。
+- 改进缺失配置文件、空模型配置和数据合并失败时的日志提示。
 
 ## 构建
 
@@ -39,6 +47,7 @@ build.cmd
 ```bat
 node tests\gpt-compat.test.cjs
 node tests\reasoning-compat.test.cjs
+node tests\reasoning-protocols.test.cjs
 powershell -ExecutionPolicy Bypass -File tests\check-layout.ps1
 ```
 
