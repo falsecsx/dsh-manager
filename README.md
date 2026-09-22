@@ -22,14 +22,6 @@ Windows 用户可以直接下载最新版本，无需安装编译工具：
 - 可选为 `openai-responses`、`openai-completions` 和 `anthropic-messages` 模型显示兼容的思考强度选项
 - 保留配置备份，关闭补丁时恢复用户原始配置
 
-## v1.0.1 更新说明
-
-- 思考强度调节支持 `openai-responses`、`openai-completions` 和 `anthropic-messages` 三种协议。
-- 兼容不同 DSH 安装布局，包括 `runtime`、`data`、`.dsh`、`config` 和其他磁盘路径。
-- 新增跨用户 DSH 数据合并，可合并供应商、模型、对话、存储和 profile，并在合并后刷新兼容配置。
-- 修复管理器启动后使用错误 DSH_HOME 导致对话记录和供应商消失的问题。
-- 改进缺失配置文件、空模型配置和数据合并失败时的日志提示。
-
 ## 构建
 
 要求：Windows、.NET Framework 4.x、系统自带 `csc.exe`。
