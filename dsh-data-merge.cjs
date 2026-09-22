@@ -17,6 +17,7 @@ function copyMissing(src, dst) {
   return count;
 }
 function mergeSettings(targetFile, sources, installDir) {
+  if (!fs.existsSync(targetFile)) throw new Error('目标配置不存在: ' + targetFile);
   const localRequire = createRequire(path.join(path.resolve(installDir), 'package.json'));
   const yaml = localRequire('js-yaml');
   const targetBytes = fs.readFileSync(targetFile);
@@ -32,7 +33,10 @@ function mergeSettings(targetFile, sources, installDir) {
     for (const [id, srcRoute] of Object.entries(incoming)) {
       if (!srcRoute || typeof srcRoute !== 'object') continue;
       const dstRoute = target['llm-pi-ai'].providers[id];
-      if (!dstRoute) { target['llm-pi-ai'].providers[id] = srcRoute; providers++; continue; }
+      if (!dstRoute) { target['llm-pi-ai'].providers[id] = srcRoute; providers++; models += Array.isArray(srcRoute.models) ? srcRoute.models.filter(model => model && model.id).length : 0; continue; }
+      for (const key of ['api', 'baseURL', 'displayName', 'apiKeyEnv', 'compat']) {
+        if (dstRoute[key] == null && srcRoute[key] != null) dstRoute[key] = srcRoute[key];
+      }
       if (!Array.isArray(srcRoute.models)) continue;
       dstRoute.models ||= [];
       const ids = new Set(dstRoute.models.map(m => m && m.id).filter(Boolean));
@@ -41,7 +45,13 @@ function mergeSettings(targetFile, sources, installDir) {
   }
   const output = yaml.dump(target, { noRefs: true, lineWidth: -1, sortKeys: false });
   const temp = targetFile + '.merge.tmp'; fs.writeFileSync(temp, output, 'utf8'); fs.renameSync(temp, targetFile);
-  return { providers, models };
+  let responseRoutes = 0, responseModels = 0;
+  for (const route of Object.values(target['llm-pi-ai'].providers || {})) {
+    if (!route || route.api !== 'openai-responses' || !Array.isArray(route.models)) continue;
+    responseRoutes++;
+    responseModels += route.models.filter(model => model && typeof model.id === 'string' && model.id.trim()).length;
+  }
+  return { providers, models, responseRoutes, responseModels };
 }
 function run(target, sources, installDir) {
   fs.mkdirSync(target, { recursive: true });
@@ -51,7 +61,7 @@ function run(target, sources, installDir) {
   const result = mergeSettings(path.join(target, 'settings.yaml'), sources, installDir);
   let files = 0;
   for (const source of sources) for (const dir of ['sessions', 'storages', 'profiles']) files += copyMissing(path.join(source, dir), path.join(target, dir));
-  return { ok: true, backup, files, providers: result.providers, models: result.models };
+  return { ok: true, backup, sourceCount: sources.length, files, providers: result.providers, models: result.models, responseRoutes: result.responseRoutes, responseModels: result.responseModels };
 }
 const [target, sourceJson, installDir, report] = process.argv.slice(2);
 try { const result = run(path.resolve(target), JSON.parse(sourceJson), installDir); fs.writeFileSync(report, JSON.stringify(result)); }

@@ -1148,6 +1148,27 @@ public class DshManagerForm : Form
             add(Path.Combine(user, ".dsh"));
             DirectoryInfo parent = Directory.GetParent(user);
             if (parent != null && Directory.Exists(parent.FullName)) foreach (string profile in Directory.GetDirectories(parent.FullName)) add(Path.Combine(profile, ".dsh"));
+            if (!string.IsNullOrEmpty(installDir))
+            {
+                DirectoryInfo current = new DirectoryInfo(installDir);
+                for (int i = 0; current != null && i < 6; i++, current = current.Parent)
+                {
+                    foreach (string name in new[] { "data", ".dsh", "config" }) add(Path.Combine(current.FullName, name));
+                }
+            }
+            foreach (DriveInfo drive in DriveInfo.GetDrives())
+            {
+                try
+                {
+                    if (!drive.IsReady) continue;
+                    foreach (string rootName in new[] { "DeepSeek-Harness", "Deepseek-Harness", "DSH", "dsh" })
+                    {
+                        string root = Path.Combine(drive.RootDirectory.FullName, rootName);
+                        foreach (string name in new[] { "data", ".dsh", "config" }) add(Path.Combine(root, name));
+                    }
+                }
+                catch { }
+            }
             return result;
         }
 
@@ -1173,9 +1194,26 @@ public class DshManagerForm : Form
                 if (!File.Exists(report)) throw new InvalidOperationException("未收到合并结果。");
                 string result = File.ReadAllText(report);
                 if (result.IndexOf("\"ok\":true", StringComparison.OrdinalIgnoreCase) < 0) throw new InvalidOperationException(result);
+                int sourceCount = ReadMergeCount(result, "sourceCount");
+                int providers = ReadMergeCount(result, "providers");
+                int models = ReadMergeCount(result, "models");
+                int files = ReadMergeCount(result, "files");
+                int responseRoutes = ReadMergeCount(result, "responseRoutes");
+                int responseModels = ReadMergeCount(result, "responseModels");
                 dshHome = target; SaveSettings();
-                Log("[数据合并] 已合并其他 DSH 配置、对话和存储数据。目标: " + target);
-                MessageBox.Show(this, "DSH 数据已合并。请重新启动 DSH 以加载合并后的对话和供应商。", "合并完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (lblDshHome != null) lblDshHome.Text = "配置目录: " + dshHome;
+                compatibilitySignature = GetCompatibilitySignature();
+                Log("[数据合并] 目标: " + GetDshSettingsYamlPath());
+                Log("[数据合并] 来源 " + sourceCount + " 个，新增供应商 " + providers + "，新增模型 " + models + "，复制文件 " + files + "。可处理 Responses 路由 " + responseRoutes + " 个、模型 " + responseModels + " 个。");
+                if (responseModels == 0)
+                {
+                    Log("[数据合并] 目标配置中没有可处理的 openai-responses 模型，请检查实际 DSH_HOME 和 settings.yaml。");
+                    MessageBox.Show(this, "合并完成，但目标配置中没有可处理的 openai-responses 模型。\n\n请检查 DSH_HOME 和 settings.yaml 是否为原来的配置。", "合并结果", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                ReconcileReasoningControl();
+                ReconcileGptCompatibility();
+                MessageBox.Show(this, "DSH 数据已合并并刷新兼容配置。\n新增供应商: " + providers + "\n新增模型: " + models + "\n复制文件: " + files + "\n\n请重新启动 DSH 以加载合并后的对话和供应商。", "合并完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex) { Log("[数据合并] 失败: " + ex.Message); MessageBox.Show(this, "合并失败: " + ex.Message, "合并失败", MessageBoxButtons.OK, MessageBoxIcon.Error); }
             finally { try { if (File.Exists(scriptPath)) File.Delete(scriptPath); if (File.Exists(report)) File.Delete(report); } catch { } }
@@ -1196,6 +1234,13 @@ public class DshManagerForm : Form
         private static string QuoteJson(string value)
         {
             return "\"" + (value ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        }
+
+        private static int ReadMergeCount(string json, string name)
+        {
+            Match match = Regex.Match(json ?? "", "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(\\d+)", RegexOptions.IgnoreCase);
+            int value;
+            return match.Success && int.TryParse(match.Groups[1].Value, out value) ? value : 0;
         }
 
 
